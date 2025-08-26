@@ -1,0 +1,12 @@
+venv
+data/*.pickle
+.ipynb_checkpoints
+.idea
+bptk_py.log
+__pycache__
+export
+
+# Elastic Beanstalk Files
+#rest-api/.elasticbeanstalk/*
+#!rest-api/.elasticbeanstalk/*.cfg.yml
+#!rest-api/.elasticbeanstalk/*.global.yml
