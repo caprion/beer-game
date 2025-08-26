@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "profiles-beergame"
+version = "0.1.0"
+description = "Behavioral profiles simulation toolkit for the Beer Distribution Game"
+requires-python = ">=3.10"
+readme = "../README.md"
+authors = [{ name = "Your Name" }]
+dependencies = [
+    "dataclasses-json",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "plotly",
+    "python-docx",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+

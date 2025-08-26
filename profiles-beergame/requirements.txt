@@ -1,0 +1,11 @@
+dataclasses-json
+numpy
+pandas
+matplotlib
+plotly
+jupyterlab
+ipykernel
+typing-extensions
+python-docx
+streamlit
+

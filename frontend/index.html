@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beer Game Configuration</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #007bff;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 0.5rem;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        select, input[type="number"] {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        textarea {
+            width: 100%;
+            height: 400px;
+            padding: 0.5rem;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: "Courier New", Courier, monospace;
+            background-color: #e9ecef;
+            color: #495057;
+        }
+        .role-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Beer Game Simulation Configurator</h1>
+        <p>Select agent profiles and set simulation parameters to generate a Python script.</p>
+
+        <h2>1. Select Agent Profiles</h2>
+        <div id="agent-selectors" class="role-grid">
+            <div class="form-group">
+                <label for="retailer">Retailer</label>
+                <select id="retailer"></select>
+            </div>
+            <div class="form-group">
+                <label for="wholesaler">Wholesaler</label>
+                <select id="wholesaler"></select>
+            </div>
+            <div class="form-group">
+                <label for="distributor">Distributor</label>
+                <select id="distributor"></select>
+            </div>
+            <div class="form-group">
+                <label for="factory">Factory</label>
+                <select id="factory"></select>
+            </div>
+        </div>
+
+        <h2>2. Configure Simulation Parameters</h2>
+        <div class="form-group role-grid">
+            <div>
+                <label for="periods">Periods (weeks)</label>
+                <input type="number" id="periods" value="52">
+            </div>
+            <div>
+                <label for="order_lead_time">Order Lead Time</label>
+                <input type="number" id="order_lead_time" value="1">
+            </div>
+            <div>
+                <label for="shipment_lead_time">Shipment Lead Time</label>
+                <input type="number" id="shipment_lead_time" value="2">
+            </div>
+            <div>
+                <label for="initial_inventory">Initial Inventory</label>
+                <input type="number" id="initial_inventory" value="12">
+            </div>
+            <div>
+                <label for="holding_cost">Holding Cost</label>
+                <input type="number" id="holding_cost" value="0.5">
+            </div>
+            <div>
+                <label for="backlog_cost">Backlog Cost</label>
+                <input type="number" id="backlog_cost" value="1.0">
+            </div>
+        </div>
+
+        <h2>3. Generate Script</h2>
+        <div class="form-group">
+            <button id="generate-btn">Generate Python Script</button>
+        </div>
+
+        <div class="form-group">
+            <label for="generated-script">Generated Python Script</label>
+            <textarea id="generated-script" readonly></textarea>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const agents = [
+                { name: "RandomBaselineAgent", params: { low: 2, high: 8 } },
+                { name: "PassivePipelineAgent", params: { target_inventory: 12 } },
+                { name: "AggressiveGrowthHackerAgent", params: { amplification_factor: 1.5, safety_buffer: 3 } },
+                { name: "ConservativeCustodianAgent", params: { conservation_factor: 0.8, max_inventory_target: 8 } },
+                { name: "MyopicFirefighterAgent", params: { emotional_volatility: 0.3, panic_threshold: 3 } },
+                { name: "SignalChaserAgent", params: { trend_sensitivity: 2.0, extrapolation_factor: 1.8 } },
+                { name: "HumanAgent", params: {} }
+            ];
+
+            const roles = ["retailer", "wholesaler", "distributor", "factory"];
+
+            // --- Main setup ---
+            populateSelectors(roles, agents);
+            document.getElementById('generate-btn').addEventListener('click', function() {
+                generateScript(roles, agents);
+            });
+        });
+
+        function populateSelectors(roles, agents) {
+            roles.forEach(role => {
+                const select = document.getElementById(role);
+                if (!select) return;
+
+                select.innerHTML = ''; // Clear existing options first
+
+                // Add a default, disabled option
+                const defaultOption = document.createElement("option");
+                defaultOption.textContent = "Select a profile...";
+                defaultOption.value = "";
+                defaultOption.disabled = true;
+                defaultOption.selected = true;
+                select.appendChild(defaultOption);
+
+                // Populate with agents
+                agents.forEach(agent => {
+                    const option = document.createElement("option");
+                    option.value = agent.name;
+                    option.textContent = agent.name.replace("Agent", "");
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        function generateScript(roles, agents) {
+            const agentObjects = agents.reduce((obj, agent) => {
+                obj[agent.name] = agent;
+                return obj;
+            }, {});
+
+            let agentImports = new Set();
+            const selectedAgents = roles.map(role => {
+                const select = document.getElementById(role);
+                const agentName = select.value;
+                if (!agentName) return null; // Skip if no agent is selected
+
+                const agentInfo = agentObjects[agentName];
+                let agentInstance = `${agentName}()`;
+
+                if (Object.keys(agentInfo.params).length > 0) {
+                    const paramsString = Object.entries(agentInfo.params)
+                        .map(([key, value]) => `${key}=${value}`)
+                        .join(', ');
+                    agentInstance = `${agentName}(${paramsString})`;
+                }
+                
+                // A simple mapping from agent name to module name.
+                // e.g., RandomBaselineAgent -> random_baseline
+                const moduleName = agentName.replace(/([A-Z])/g, '_$1').toLowerCase().substring(1).replace('_agent','');
+                if (agentName !== 'HumanAgent') { // HumanAgent might not have a dedicated file
+                    agentImports.add(`from profiles_beergame.agents.${moduleName} import ${agentName}`);
+                }
+
+
+                return `    '${role}': ${agentInstance}`;
+            }).filter(Boolean); // Filter out nulls
+
+            if (selectedAgents.length < roles.length) {
+                alert("Please select a profile for all roles before generating the script.");
+                return;
+            }
+            
+            const config = {
+                periods: document.getElementById("periods").value,
+                order_lead_time: document.getElementById("order_lead_time").value,
+                shipment_lead_time: document.getElementById("shipment_lead_time").value,
+                initial_inventory: document.getElementById("initial_inventory").value,
+                holding_cost: document.getElementById("holding_cost").value,
+                backlog_cost: document.getElementById("backlog_cost").value
+            };
+
+            const script = `
+# Generated by the Beer Game Web UI
+import pandas as pd
+from profiles_beergame.engine.simulation import SimulationRunner, SimulationConfig, constant_demand
+${Array.from(agentImports).join('\n')}
+
+def main():
+    # 1. Create agents for each role
+    agents = {
+${selectedAgents.join(',\n')}
+    }
+
+    # 2. Configure simulation parameters
+    config = SimulationConfig(
+        periods=${config.periods},
+        order_lead_time=${config.order_lead_time},
+        shipment_lead_time=${config.shipment_lead_time},
+        initial_inventory=${config.initial_inventory},
+        holding_cost=${config.holding_cost},
+        backlog_cost=${config.backlog_cost},
+        random_seed=42
+    )
+
+    # 3. Run simulation with a constant demand of 4 units
+    print("Running simulation...")
+    runner = SimulationRunner(agents, constant_demand(4), config)
+    results = runner.run()
+    print("Simulation complete.")
+
+    # 4. Print and plot results
+    pd.set_option('display.width', 200)
+    pd.set_option('display.max_columns', 20)
+    print("\nSimulation Results (first 5 rows):")
+    print(results.head())
+
+    # To analyze results further, you can use the functions below
+    # from profiles_beergame.metrics.analytics import compute_bullwhip, summarize_kpis
+    # from profiles_beergame.plots.plotting import plot_time_series
+    # 
+    # bullwhip = compute_bullwhip(results)
+    # print("\nBullwhip factors by role:")
+    # print(bullwhip)
+    # 
+    # kpis = summarize_kpis(results)
+    # print("\nKPI Summary:")
+    # print(kpis)
+    # 
+    # print("\nGenerating plot...")
+    # fig = plot_time_series(results, show=False)
+    # fig.show() # or fig.write_html("simulation_plot.html")
+
+if __name__ == '__main__':
+    main()
+`
+            const textarea = document.getElementById("generated-script");
+            textarea.value = script.trim();
+        }
+    </script>
+
+</body>
+</html>
