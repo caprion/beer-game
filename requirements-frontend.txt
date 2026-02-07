@@ -1,0 +1,6 @@
+# Beer Game Simulation — Dashboard requirements
+# NOTE: pyarrow is intentionally excluded (no ARM64 wheel for Python 3.13)
+streamlit>=1.29.0
+pandas>=2.1.0
+plotly>=5.18.0
+numpy>=1.26.0

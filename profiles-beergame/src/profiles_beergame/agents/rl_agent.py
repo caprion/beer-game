@@ -73,7 +73,10 @@ class RLAgent(AgentProtocol):
 
         # Update the Q-table
         if self.last_state is not None:
-            reward = - (state.params['holding_cost'] * state.inventory_on_hand + state.params['backlog_cost'] * state.backlog)
+            params = state.params or {}
+            h_cost = params.get('holding_cost', 0.5)
+            b_cost = params.get('backlog_cost', 1.0)
+            reward = - (h_cost * state.inventory_on_hand + b_cost * state.backlog)
             old_q_value = self.q_table[self.last_state][self.last_action]
             new_q_value = old_q_value + self.learning_rate * (
                 reward

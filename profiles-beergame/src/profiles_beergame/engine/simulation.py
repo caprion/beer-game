@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Callable, Optional, Any
 
-from ..interfaces import AgentProtocol, RoleState
+from ..interfaces import AgentProtocol, RoleState, NeighborState
 
 
 @dataclass
@@ -16,6 +16,11 @@ class SimulationConfig:
     holding_cost: float = 0.5
     backlog_cost: float = 1.0
     random_seed: Optional[int] = 42
+    # Information sharing: 'none', 'adjacent', 'full'
+    # none     = classic beer game (each agent sees only own state)
+    # adjacent = each agent sees upstream + downstream neighbor state
+    # full     = each agent sees all roles' states
+    information_sharing: str = "none"
 
 
 def constant_demand(value: int) -> Callable[[int], int]:
@@ -69,7 +74,27 @@ class SimulationRunner:
 
         self.log_rows: List[Dict] = []
 
+    def _build_neighbor_state(self, role: str) -> NeighborState:
+        """Build a partial state snapshot of a given role for its neighbors."""
+        return NeighborState(
+            role=role,
+            inventory_on_hand=self.inventory[role],
+            backlog=self.backlog[role],
+            last_placed_order=self.last_order[role],
+        )
+
     def _build_state(self, role: str, t: int) -> RoleState:
+        upstream_state = None
+        downstream_state = None
+
+        if self.cfg.information_sharing in ("adjacent", "full"):
+            up = self.upstream_of[role]
+            down = self.downstream_of[role]
+            if up is not None:
+                upstream_state = self._build_neighbor_state(up)
+            if down is not None:
+                downstream_state = self._build_neighbor_state(down)
+
         return RoleState(
             period_index=t,
             role=role,
@@ -80,6 +105,8 @@ class SimulationRunner:
             pipeline_on_order=sum(self.pipeline[role]) if self.pipeline[role] else 0,
             last_placed_order=self.last_order[role],
             params={'holding_cost': self.cfg.holding_cost, 'backlog_cost': self.cfg.backlog_cost},
+            upstream_state=upstream_state,
+            downstream_state=downstream_state,
         )
 
     def _record(self, t: int, role: str, placed_order: int, cost_h: float, cost_b: float) -> None:

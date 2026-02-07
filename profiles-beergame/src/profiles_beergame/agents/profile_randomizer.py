@@ -11,6 +11,12 @@ from .conservative_custodian import ConservativeCustodianAgent
 from .myopic_firefighter import MyopicFirefighterAgent
 from .signal_chaser import SignalChaserAgent
 from .human_agent import HumanAgent
+from .rational_analyst import RationalAnalystAgent
+from .stabilizer import StabilizerAgent
+from .production_smoother import ProductionSmootherAgent
+from .bayesian_updater import BayesianUpdaterAgent
+from .inverter import InverterAgent
+from .antifragile_adapter import AntifragileAdapterAgent
 
 
 class ProfileRandomizer:
@@ -69,43 +75,111 @@ class ProfileRandomizer:
                 "extrapolation_factor": (1.3, 2.5),
                 "min_trend_threshold": (1, 3)
             }
-        }
+        },
+        "rational_analyst": {
+            "class": RationalAnalystAgent,
+            "params": {
+                "target_inventory": (8, 16),
+                "smoothing": (0.0, 0.5),
+            }
+        },
+        "stabilizer": {
+            "class": StabilizerAgent,
+            "params": {
+                "target_inventory": (8, 16),
+                "smoothing_alpha": (0.1, 0.5),
+                "max_correction_per_period": (2, 6),
+            }
+        },
+        "production_smoother": {
+            "class": ProductionSmootherAgent,
+            "params": {
+                "window_size": (3, 8),
+                "min_production": (1, 4),
+                "max_production": (10, 20),
+            }
+        },
+        "bayesian_updater": {
+            "class": BayesianUpdaterAgent,
+            "params": {
+                "target_inventory": (8, 16),
+                "prior_demand": (3.0, 6.0),
+                "prior_strength": (3, 10),
+            }
+        },
+        "inverter": {
+            "class": InverterAgent,
+            "params": {
+                "target_inventory": (8, 16),
+                "max_change_rate": (2, 5),
+            }
+        },
+        "antifragile_adapter": {
+            "class": AntifragileAdapterAgent,
+            "params": {
+                "target_inventory": (8, 16),
+                "initial_buffer": (0.5, 3.0),
+                "learning_rate": (0.05, 0.2),
+                "max_buffer": (4.0, 8.0),
+            }
+        },
     }
     
     # Role-specific tendencies (weights for profile selection)
     ROLE_TENDENCIES = {
         "retailer": {
-            "signal_chaser": 0.3,
-            "aggressive_growth_hacker": 0.25,
-            "myopic_firefighter": 0.2,
-            "conservative_custodian": 0.1,
-            "passive_pipeline": 0.1,
-            "random_baseline": 0.05
+            "signal_chaser": 0.20,
+            "aggressive_growth_hacker": 0.15,
+            "myopic_firefighter": 0.12,
+            "conservative_custodian": 0.08,
+            "passive_pipeline": 0.08,
+            "rational_analyst": 0.10,
+            "stabilizer": 0.08,
+            "bayesian_updater": 0.07,
+            "inverter": 0.05,
+            "antifragile_adapter": 0.04,
+            "random_baseline": 0.03,
         },
         "wholesaler": {
-            "passive_pipeline": 0.4,
-            "conservative_custodian": 0.2,
-            "signal_chaser": 0.15,
-            "aggressive_growth_hacker": 0.1,
-            "myopic_firefighter": 0.1,
-            "random_baseline": 0.05
+            "passive_pipeline": 0.25,
+            "conservative_custodian": 0.12,
+            "signal_chaser": 0.10,
+            "aggressive_growth_hacker": 0.08,
+            "myopic_firefighter": 0.07,
+            "rational_analyst": 0.10,
+            "stabilizer": 0.10,
+            "bayesian_updater": 0.07,
+            "inverter": 0.05,
+            "antifragile_adapter": 0.03,
+            "random_baseline": 0.03,
         },
         "distributor": {
-            "passive_pipeline": 0.35,
-            "conservative_custodian": 0.25,
-            "signal_chaser": 0.15,
-            "aggressive_growth_hacker": 0.1,
-            "myopic_firefighter": 0.1,
-            "random_baseline": 0.05
+            "passive_pipeline": 0.22,
+            "conservative_custodian": 0.15,
+            "signal_chaser": 0.08,
+            "aggressive_growth_hacker": 0.07,
+            "myopic_firefighter": 0.06,
+            "rational_analyst": 0.10,
+            "stabilizer": 0.12,
+            "bayesian_updater": 0.08,
+            "inverter": 0.05,
+            "antifragile_adapter": 0.04,
+            "random_baseline": 0.03,
         },
         "factory": {
-            "conservative_custodian": 0.3,
-            "passive_pipeline": 0.25,
-            "aggressive_growth_hacker": 0.2,
-            "signal_chaser": 0.1,
-            "myopic_firefighter": 0.1,
-            "random_baseline": 0.05
-        }
+            "conservative_custodian": 0.15,
+            "passive_pipeline": 0.12,
+            "aggressive_growth_hacker": 0.10,
+            "production_smoother": 0.18,
+            "signal_chaser": 0.05,
+            "myopic_firefighter": 0.05,
+            "rational_analyst": 0.08,
+            "stabilizer": 0.10,
+            "bayesian_updater": 0.06,
+            "inverter": 0.04,
+            "antifragile_adapter": 0.04,
+            "random_baseline": 0.03,
+        },
     }
     
     def __init__(self, seed: Optional[int] = None):

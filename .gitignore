@@ -143,3 +143,10 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# IDE / editor
+.cursor/
+.vscode/
+
+# Streamlit secrets
+.streamlit/secrets.toml
