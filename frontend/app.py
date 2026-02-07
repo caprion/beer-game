@@ -10,6 +10,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import itertools
+import time
 
 from profiles_beergame.engine.simulation import SimulationRunner, SimulationConfig, constant_demand
 from profiles_beergame.engine.demand_patterns import step_demand, seasonal_demand, noisy_demand, shock_demand
@@ -494,10 +496,11 @@ def df_to_markdown(df: pd.DataFrame, float_fmt: str = ".2f") -> str:
 # Main app
 # ──────────────────────────────────────────────────────────────
 
-tab_sim, tab_experiment, tab_info_exp = st.tabs([
+tab_sim, tab_experiment, tab_info_exp, tab_optimizer = st.tabs([
     "Single Simulation",
     "Profile Comparison",
     "Info Symmetry Experiment",
+    "Combination Optimizer",
 ])
 
 
@@ -901,3 +904,388 @@ with tab_info_exp:
 
         csv_info = paired_df.to_csv(index=False)
         st.download_button("Download Info Experiment CSV", csv_info, "info_experiment.csv", "text/csv", key="dl_info")
+
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 4: Combination Optimizer
+# ═══════════════════════════════════════════════════════════════
+
+with tab_optimizer:
+    st.header("Combination Optimizer")
+    st.caption(
+        "Search agent combinations across all four roles to find the "
+        "highest fill rates and lowest bullwhip effect."
+    )
+
+    # ----- configuration -----
+    col_oc1, col_oc2 = st.columns(2)
+    with col_oc1:
+        opt_periods = st.slider("Periods", 10, 100, 52, key="opt_periods")
+        opt_info = st.selectbox(
+            "Information Sharing", ["none", "adjacent"], key="opt_info",
+        )
+        opt_seed = st.number_input("Random Seed", value=42, key="opt_seed")
+
+    with col_oc2:
+        opt_demand_type = st.selectbox(
+            "Demand Pattern",
+            ["Constant", "Step", "Seasonal", "Noisy", "Shock"],
+            key="opt_demand",
+        )
+        opt_demand_params: dict = {}
+        if opt_demand_type == "Constant":
+            opt_demand_params["base"] = st.slider("Demand", 1, 20, 4, key="opt_d_base")
+        elif opt_demand_type == "Step":
+            opt_demand_params["initial"] = st.slider("Initial Demand", 1, 15, 4, key="opt_d_init")
+            opt_demand_params["final"] = st.slider("Final Demand", 2, 25, 8, key="opt_d_final")
+            opt_demand_params["step_period"] = st.slider("Step at Period", 1, 50, 10, key="opt_d_step")
+        elif opt_demand_type == "Seasonal":
+            opt_demand_params["base"] = st.slider("Base Demand", 1, 15, 4, key="opt_d_sb")
+            opt_demand_params["amplitude"] = st.slider("Amplitude", 1, 10, 3, key="opt_d_amp")
+            opt_demand_params["period"] = st.slider("Cycle", 4, 26, 12, key="opt_d_per")
+        elif opt_demand_type == "Noisy":
+            opt_demand_params["base"] = st.slider("Base Demand", 1, 15, 4, key="opt_d_nb")
+            opt_demand_params["noise"] = st.slider("Noise Range (+/-)", 0, 8, 2, key="opt_d_noise")
+            opt_demand_params["seed"] = int(st.number_input("Noise Seed", value=42, key="opt_d_nseed"))
+        elif opt_demand_type == "Shock":
+            opt_demand_params["base"] = st.slider("Base Demand", 1, 15, 4, key="opt_d_shb")
+            opt_demand_params["shock_period"] = st.slider("Shock at Period", 1, 50, 15, key="opt_d_shp")
+            opt_demand_params["shock_duration"] = st.slider("Shock Duration", 1, 10, 3, key="opt_d_shd")
+            opt_demand_params["shock_magnitude"] = st.slider("Shock Magnitude", 5, 30, 12, key="opt_d_shm")
+
+    st.divider()
+
+    # ----- agent selection per role -----
+    st.subheader("Agent Candidates")
+    st.markdown(
+        "Select which agents to include in the search. "
+        "Fewer agents = faster search. "
+        "Total combinations = (agents selected)^4."
+    )
+
+    # Sensible defaults — rational + moderate agents tend to perform better
+    _defaults_opt = [
+        k for k, v in AGENT_REGISTRY.items()
+        if v["category"] in ("rational", "moderate")
+    ]
+
+    opt_agents = st.multiselect(
+        "Agents to search",
+        options=PROFILE_NAMES,
+        default=_defaults_opt,
+        format_func=lambda k: PROFILE_LABELS[k],
+        key="opt_agents",
+    )
+
+    n_agents = len(opt_agents)
+    n_combos = n_agents ** 4
+    st.info(
+        f"**{n_agents}** agents selected  \u2192  **{n_combos:,}** combinations to evaluate",
+        icon="\u2139\ufe0f",
+    )
+
+    if n_combos > 50_000:
+        st.warning(
+            "More than 50,000 combinations — this may take several minutes. "
+            "Consider narrowing the agent list.",
+            icon="\u26a0\ufe0f",
+        )
+
+    # ----- scoring weights -----
+    with st.expander("Scoring Weights"):
+        st.markdown(
+            "The optimizer ranks combinations by a **composite score**:  \n"
+            "`Score = w_fill \u00d7 Fill Rate \u2212 w_bullwhip \u00d7 normalised_bullwhip \u2212 w_cost \u00d7 normalised_cost`  \n"
+            "Higher is better. Adjust weights to emphasise what matters most."
+        )
+        w_fill = st.slider("Fill Rate Weight", 0.0, 10.0, 5.0, 0.5, key="w_fill")
+        w_bw = st.slider("Bullwhip Penalty Weight", 0.0, 10.0, 3.0, 0.5, key="w_bw")
+        w_cost = st.slider("Cost Penalty Weight", 0.0, 10.0, 2.0, 0.5, key="w_cost")
+
+    top_n = st.slider("Show top N results", 5, 50, 20, key="opt_topn")
+
+    # ----- run -----
+    if st.button("Run Optimizer", type="primary", key="run_opt"):
+        if n_agents < 2:
+            st.error("Select at least 2 agents to search.")
+        else:
+            demand_fn = build_demand_fn(opt_demand_type, opt_demand_params)
+            config = SimulationConfig(
+                periods=opt_periods,
+                information_sharing=opt_info,
+                random_seed=int(opt_seed),
+            )
+
+            # Pre-build agent instances (keyed by profile) — reuse across combos
+            agent_cache: dict = {}
+            for pk in opt_agents:
+                default_params = {k: v[3] for k, v in AGENT_REGISTRY[pk]["params"].items()}
+                agent_cache[pk] = lambda _pk=pk, _dp=default_params: create_agent(_pk, _dp)
+
+            combos = list(itertools.product(opt_agents, repeat=4))
+            results_rows = []
+            progress = st.progress(0, text="Evaluating combinations...")
+            t0 = time.time()
+
+            for idx, combo in enumerate(combos):
+                agents = {
+                    role: agent_cache[combo[i]]()
+                    for i, role in enumerate(ROLES)
+                }
+                runner = SimulationRunner(agents, demand_fn, config)
+                df_run = runner.run()
+
+                bw = compute_bullwhip(df_run)
+                sl = compute_service_level(df_run)
+                sys_cost = compute_system_cost(df_run)
+
+                results_rows.append({
+                    "retailer": PROFILE_LABELS[combo[0]],
+                    "wholesaler": PROFILE_LABELS[combo[1]],
+                    "distributor": PROFILE_LABELS[combo[2]],
+                    "factory": PROFILE_LABELS[combo[3]],
+                    "retailer_key": combo[0],
+                    "wholesaler_key": combo[1],
+                    "distributor_key": combo[2],
+                    "factory_key": combo[3],
+                    "avg_fill_rate": sl["fill_rate"].mean(),
+                    "min_fill_rate": sl["fill_rate"].min(),
+                    "avg_bullwhip": bw["bullwhip_factor"].mean(),
+                    "max_bullwhip": bw["bullwhip_factor"].max(),
+                    "system_cost": sys_cost,
+                })
+
+                if (idx + 1) % max(1, len(combos) // 100) == 0 or idx == len(combos) - 1:
+                    elapsed = time.time() - t0
+                    pct = (idx + 1) / len(combos)
+                    eta = (elapsed / pct - elapsed) if pct > 0 else 0
+                    progress.progress(
+                        pct,
+                        text=f"Evaluated {idx+1:,}/{len(combos):,} "
+                             f"({pct:.0%}) — ETA {eta:.0f}s",
+                    )
+
+            progress.empty()
+            elapsed_total = time.time() - t0
+            st.success(f"Evaluated **{len(combos):,}** combinations in **{elapsed_total:.1f}s**")
+
+            opt_df = pd.DataFrame(results_rows)
+
+            # --- Composite score ---
+            # Normalise bullwhip and cost to [0,1]
+            bw_min, bw_max = opt_df["avg_bullwhip"].min(), opt_df["avg_bullwhip"].max()
+            cost_min, cost_max = opt_df["system_cost"].min(), opt_df["system_cost"].max()
+            bw_range = bw_max - bw_min if bw_max != bw_min else 1.0
+            cost_range = cost_max - cost_min if cost_max != cost_min else 1.0
+
+            opt_df["norm_bullwhip"] = (opt_df["avg_bullwhip"] - bw_min) / bw_range
+            opt_df["norm_cost"] = (opt_df["system_cost"] - cost_min) / cost_range
+            opt_df["score"] = (
+                w_fill * opt_df["avg_fill_rate"]
+                - w_bw * opt_df["norm_bullwhip"]
+                - w_cost * opt_df["norm_cost"]
+            )
+            opt_df = opt_df.sort_values("score", ascending=False).reset_index(drop=True)
+            opt_df.index = opt_df.index + 1  # 1-based rank
+            opt_df.index.name = "rank"
+
+            st.session_state["opt_df"] = opt_df
+            st.session_state["opt_top_n"] = top_n
+
+    # ----- display results -----
+    if "opt_df" in st.session_state:
+        opt_df = st.session_state["opt_df"]
+        show_n = st.session_state.get("opt_top_n", 20)
+        top = opt_df.head(show_n)
+
+        st.subheader(f"Top {show_n} Combinations")
+
+        # Best combo callout
+        best = opt_df.iloc[0]
+        st.success(
+            f"**Best combination** (Score {best['score']:.3f})  \n"
+            f"Retailer: {best['retailer']}  |  "
+            f"Wholesaler: {best['wholesaler']}  |  "
+            f"Distributor: {best['distributor']}  |  "
+            f"Factory: {best['factory']}  \n"
+            f"Fill Rate: {best['avg_fill_rate']:.0%}  |  "
+            f"Bullwhip: {best['avg_bullwhip']:.1f}x  |  "
+            f"Cost: \u20b9{best['system_cost']:,.0f}"
+        )
+
+        # KPI cards for best
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Fill Rate (best)", f"{best['avg_fill_rate']:.0%}")
+        c2.metric("Min Role Fill Rate", f"{best['min_fill_rate']:.0%}")
+        c3.metric("Avg Bullwhip", f"{best['avg_bullwhip']:.1f}x")
+        c4.metric("System Cost", f"\u20b9{best['system_cost']:,.0f}")
+
+        # Ranking table
+        display_cols = [
+            "retailer", "wholesaler", "distributor", "factory",
+            "avg_fill_rate", "min_fill_rate", "avg_bullwhip",
+            "max_bullwhip", "system_cost", "score",
+        ]
+        st.markdown(df_to_markdown(top[display_cols].reset_index()), unsafe_allow_html=True)
+
+        # ----- Scatter: fill rate vs bullwhip (Pareto front) -----
+        st.subheader("Fill Rate vs Bullwhip — All Combinations")
+
+        # Compute Pareto frontier (fill rate ↑, bullwhip ↓)
+        # Sort by fill rate descending, then scan for non-dominated points
+        _sorted = opt_df.sort_values("avg_fill_rate", ascending=False)
+        pareto_idx = []
+        best_bw = float("inf")
+        for i, row in _sorted.iterrows():
+            if row["avg_bullwhip"] <= best_bw:
+                pareto_idx.append(i)
+                best_bw = row["avg_bullwhip"]
+        opt_df["pareto"] = False
+        opt_df.loc[pareto_idx, "pareto"] = True
+        pareto_points = opt_df[opt_df["pareto"]].sort_values("avg_fill_rate")
+
+        fig_pareto = go.Figure()
+
+        # All combos as faded scatter
+        fig_pareto.add_trace(go.Scatter(
+            x=opt_df["avg_fill_rate"],
+            y=opt_df["avg_bullwhip"],
+            mode="markers",
+            marker=dict(size=4, color="#ede4d5", opacity=0.5),
+            name="All combinations",
+            hovertemplate=(
+                "Fill Rate: %{x:.0%}<br>Bullwhip: %{y:.1f}x<br>"
+                "<extra></extra>"
+            ),
+        ))
+
+        # Top-N highlighted
+        fig_pareto.add_trace(go.Scatter(
+            x=top["avg_fill_rate"],
+            y=top["avg_bullwhip"],
+            mode="markers",
+            marker=dict(size=7, color="#1a5c4c", opacity=0.8),
+            name=f"Top {show_n}",
+            text=[
+                f"R:{r}<br>W:{w}<br>D:{d}<br>F:{f}"
+                for r, w, d, f in zip(top["retailer"], top["wholesaler"],
+                                       top["distributor"], top["factory"])
+            ],
+            hovertemplate=(
+                "%{text}<br>Fill Rate: %{x:.0%}<br>Bullwhip: %{y:.1f}x"
+                "<extra></extra>"
+            ),
+        ))
+
+        # Pareto frontier line
+        if len(pareto_points) > 0:
+            fig_pareto.add_trace(go.Scatter(
+                x=pareto_points["avg_fill_rate"],
+                y=pareto_points["avg_bullwhip"],
+                mode="lines+markers",
+                marker=dict(size=9, color="#c2452d", symbol="diamond"),
+                line=dict(color="#c2452d", dash="dash", width=1.5),
+                name="Pareto frontier",
+                text=[
+                    f"R:{r}<br>W:{w}<br>D:{d}<br>F:{f}"
+                    for r, w, d, f in zip(
+                        pareto_points["retailer"], pareto_points["wholesaler"],
+                        pareto_points["distributor"], pareto_points["factory"],
+                    )
+                ],
+                hovertemplate=(
+                    "%{text}<br>Fill Rate: %{x:.0%}<br>Bullwhip: %{y:.1f}x"
+                    "<extra></extra>"
+                ),
+            ))
+
+        fig_pareto.update_layout(
+            xaxis_title="Average Fill Rate",
+            yaxis_title="Average Bullwhip Factor",
+            height=500,
+            margin=dict(t=30, b=40),
+            **PLOTLY_LAYOUT,
+        )
+        st.plotly_chart(fig_pareto, width="stretch")
+
+        # ----- Which agents appear most in top combos, by role -----
+        st.subheader("Best Agents by Role (frequency in top combos)")
+
+        freq_data = []
+        for role in ROLES:
+            counts = top[role].value_counts()
+            for agent_label, count in counts.items():
+                freq_data.append({
+                    "role": role,
+                    "agent": agent_label,
+                    "count": count,
+                    "pct": count / len(top),
+                })
+        freq_df = pd.DataFrame(freq_data)
+
+        if not freq_df.empty:
+            fig_freq = px.bar(
+                freq_df, x="role", y="count", color="agent",
+                title=f"Agent Frequency in Top {show_n} Combinations",
+                barmode="stack",
+                color_discrete_sequence=EARTH_PALETTE * 3,
+                labels={"count": "Appearances", "role": "Role", "agent": "Agent"},
+            )
+            fig_freq.update_layout(
+                height=400, xaxis_tickangle=0, **PLOTLY_LAYOUT,
+            )
+            st.plotly_chart(fig_freq, width="stretch")
+
+            # Per-role best agent summary
+            st.markdown("**Most frequent agent per role in top combinations:**")
+            role_best = []
+            for role in ROLES:
+                role_freq = freq_df[freq_df["role"] == role].sort_values("count", ascending=False)
+                if not role_freq.empty:
+                    best_agent = role_freq.iloc[0]
+                    role_best.append({
+                        "Role": role.title(),
+                        "Best Agent": best_agent["agent"],
+                        f"Appearances (of {show_n})": int(best_agent["count"]),
+                        "Share": f"{best_agent['pct']:.0%}",
+                    })
+            st.markdown(
+                df_to_markdown(pd.DataFrame(role_best)),
+                unsafe_allow_html=True,
+            )
+
+        # ----- Pareto frontier table -----
+        with st.expander(f"Pareto-Optimal Combinations ({len(pareto_points)})"):
+            st.markdown(
+                "These combinations are **not dominated** by any other — "
+                "no other combo has both higher fill rate *and* lower bullwhip."
+            )
+            st.markdown(
+                df_to_markdown(pareto_points[display_cols].reset_index()),
+                unsafe_allow_html=True,
+            )
+
+        # ----- Summary statistics -----
+        with st.expander("Distribution Summary"):
+            st.markdown(f"**Total combinations evaluated:** {len(opt_df):,}")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Median Fill Rate", f"{opt_df['avg_fill_rate'].median():.0%}")
+            c2.metric("Median Bullwhip", f"{opt_df['avg_bullwhip'].median():.1f}x")
+            c3.metric("Median Cost", f"\u20b9{opt_df['system_cost'].median():,.0f}")
+
+            # Fill rate distribution
+            fig_hist = px.histogram(
+                opt_df, x="avg_fill_rate", nbins=30,
+                title="Fill Rate Distribution Across All Combinations",
+                color_discrete_sequence=["#1a5c4c"],
+                labels={"avg_fill_rate": "Average Fill Rate", "count": "Combinations"},
+            )
+            fig_hist.update_layout(height=300, **PLOTLY_LAYOUT)
+            st.plotly_chart(fig_hist, width="stretch")
+
+        # ----- Download -----
+        csv_opt = opt_df[display_cols + ["pareto"]].reset_index().to_csv(index=False)
+        st.download_button(
+            "Download All Results CSV", csv_opt,
+            "combination_optimizer.csv", "text/csv", key="dl_opt",
+        )
