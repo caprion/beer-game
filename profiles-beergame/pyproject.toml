@@ -7,7 +7,7 @@ name = "profiles-beergame"
 version = "0.1.0"
 description = "Behavioral profiles simulation toolkit for the Beer Distribution Game"
 requires-python = ">=3.10"
-authors = [{ name = "Your Name" }]
+authors = [{ name = "Caprion" }]
 dependencies = [
     "dataclasses-json",
     "numpy",

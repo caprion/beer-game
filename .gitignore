@@ -150,3 +150,6 @@ cython_debug/
 
 # Streamlit secrets
 .streamlit/secrets.toml
+
+# Allow .python-version in frontend/ for Streamlit Cloud
+!frontend/.python-version

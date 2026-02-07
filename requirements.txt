@@ -1,0 +1,14 @@
+# Beer Game Simulation — Streamlit Cloud
+# ----------------------------------------
+# Streamlit Cloud auto-detects this file and runs pip install -r requirements.txt
+
+streamlit>=1.29.0
+pandas>=2.1.0
+plotly>=5.18.0
+numpy>=1.26.0
+dataclasses-json
+matplotlib
+python-docx
+
+# Local package (installed from repo sub-directory)
+./profiles-beergame

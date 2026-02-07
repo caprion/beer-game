@@ -13,7 +13,7 @@ Reference: `transentis/beergame` repository as conceptual inspiration and for wo
 - Allow optional human player for any role via interactive input or injected callback.
 
 ### Non-Goals
-- Building a rich UI/web app in the first iteration.
+- ~~Building a rich UI/web app in the first iteration.~~ (Done — Streamlit dashboard with 3 tabs)
 - Implementing advanced RL agents (may be future work).
 
 ### Primary Users

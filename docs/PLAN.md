@@ -1,37 +1,46 @@
-## Delivery Plan and Tasks
+## Delivery Plan — Status
 
-### Milestone 1 — Scaffolding and Docs
-- Create PRD and Architecture docs [done].
-- Set up Python package skeleton and requirements.
-- Add initial notebooks.
+All milestones complete.
 
-### Milestone 2 — Engine and Interfaces
-- Implement `interfaces.State` and `AgentProtocol`.
-- Implement minimal `SimulationRunner` supporting four roles, delays, and logging.
-- Add basic constant demand process and default parameters.
+### Milestone 1 — Scaffolding and Docs [done]
+- PRD, Architecture, Profiles docs created
+- Python package skeleton with pyproject.toml
 
-### Milestone 3 — Behavioral Profiles (MVP)
-- Implement five rule-based profiles (Aggressive, Myopic, Conservative, Signal Chaser, Passive) and a Random baseline.
-- Parameterize profiles via constructor args.
-- Add unit tests for decision rules.
+### Milestone 2 — Engine and Interfaces [done]
+- `AgentProtocol`, `RoleState`, `NeighborState` dataclasses
+- `SimulationRunner` with four roles, lead times, logging
+- `constant_demand` and `SimulationConfig`
 
-### Milestone 4 — Metrics and Plots
-- Compute bullwhip, service level, inventory/backlog summaries, costs.
-- Plot time series and bullwhip bar charts.
+### Milestone 3 — Behavioral Profiles (MVP) [done]
+- 6 original agents: Aggressive, Myopic, Conservative, Signal Chaser, Passive, Random
+- Parameterized via constructor args
+- Unit tests for decision rules
 
-### Milestone 5 — Human-in-the-Loop Option
-- Implement `HumanAgent` that uses callback or `input()` to return order.
-- Guard with non-interactive fallback for batch runs.
+### Milestone 4 — Metrics and Plots [done]
+- Bullwhip, service level, oscillation, system cost, scenario comparison
+- Plotly charts with earth-toned palette
 
-### Milestone 6 — Experimentation and Validation
-- Notebook to run profile mixtures and compare.
-- Parameter sweeps and random seed control.
+### Milestone 5 — Human-in-the-Loop [done]
+- `HumanAgent` with callback/input support
 
-### Acceptance Criteria
-- See PRD AC1–AC4.
+### Milestone 6 — Extended Agents and Information Sharing [done]
+- 7 new agents: RationalAnalyst, Stabilizer, ProductionSmoother, BayesianUpdater,
+  Inverter, AntifragileAdapter, InfoAwareAgent
+- Engine: `information_sharing` modes (none/adjacent)
+- Demand patterns: step, seasonal, noisy, shock
 
-### Risks
-- DOCX behavioral details need confirmation for exact formulas.
-- Time synchronization of lead times must be correct to avoid artifacts.
+### Milestone 7 — Interactive Frontend [done]
+- Streamlit dashboard with 3 tabs
+- Indian Earth design system
+- No pyarrow dependency (HTML table rendering)
+- Currency: INR
+
+### Milestone 8 — Testing [done]
+- 42 tests covering all agents, engine, analytics, info sharing
+- All passing
+
+### Milestone 9 — Deployment [done]
+- Streamlit Community Cloud deployment
+- Git push triggers auto-deploy
 
 

@@ -1,5 +1,8 @@
-# Beer Game Simulation — Dashboard requirements
-# NOTE: pyarrow is intentionally excluded (no ARM64 wheel for Python 3.13)
+# Beer Game Simulation — Streamlit Cloud requirements
+# Install the local package
+-e profiles-beergame/
+
+# Dashboard dependencies
 streamlit>=1.29.0
 pandas>=2.1.0
 plotly>=5.18.0
